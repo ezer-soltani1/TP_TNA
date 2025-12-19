@@ -5,7 +5,7 @@ clear variables; close all; clc;
 fprintf('Chargement des données...\n');
 load('pdm_in.mat');
 signal_pdm = in;
-signal_pdm = signal_pdm(:); % Force en vecteur colonne
+signal_pdm = signal_pdm(:);
 Fs_in = 6.144e6;  % 6.144 MHz
 
 % --- FILTRE FIR (Equiripple) ---
@@ -52,7 +52,6 @@ f = Fs_in*(0:(N_fft/2))/N_fft;
 % Fonction locale pour calculer le spectre en dB
 calc_db = @(sig) 20*log10( abs(fft(sig, N_fft)/L).*(1:N_fft)'*0+1 + eps );
 
-% Calculs (On ne garde que la première moitié P1 pour l'affichage)
 raw_fft = fft(signal_pdm, N_fft);
 P2 = abs(raw_fft/L); P1_pdm = P2(1:N_fft/2+1); P1_pdm(2:end-1) = 2*P1_pdm(2:end-1);
 spec_pdm = 20*log10(P1_pdm + eps);
@@ -77,7 +76,6 @@ spec_cheby2 = 20*log10(P1 + eps);
 %% 4. AFFICHAGE COMPARATIF
 figure('Name', 'Comparaison Spectrale (Bande Audio)', 'Color', 'w');
 
-% On trace
 semilogx(f, spec_pdm,    'Color', [0.8 0.8 0.8], 'LineWidth', 1,   'DisplayName', 'PDM Input (Brut)'); hold on;
 semilogx(f, spec_fir,    'b',                    'LineWidth', 1.5, 'DisplayName', 'FIR : Equiripple');
 semilogx(f, spec_butter, 'r--',                  'LineWidth', 1.2, 'DisplayName', 'IIR : Butterworth');

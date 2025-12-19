@@ -1,0 +1,74 @@
+C'est une excellente demande. Pour réussir ce TP "Avancé", il ne suffit pas de savoir que `resample` existe, il faut comprendre ce qui se passe sous le capot, spectralement et temporellement.
+
+Voici le cours accéléré de **DSP (Digital Signal Processing)** niveau Master sur le changement de cadence.
+
+---
+
+### Le Problème Fondamental
+En numérique, le temps n'est pas continu. C'est une grille.
+*   Le CD place un point toutes les **22,6 µs** ($1/44100$).
+*   Le système Studio veut un point toutes les **20,8 µs** ($1/48000$).
+
+Les points ne tombent jamais au même endroit ! On ne peut pas "inventer" la valeur entre deux points sans un calcul mathématique rigoureux. C'est le rôle du SRC (Sample Rate Converter).
+
+---
+
+### 1. L'Interpolation (Augmenter la cadence)
+On veut multiplier la fréquence d'échantillonnage par un facteur entier $L$.
+
+Cela se fait en 2 étapes strictes :
+
+#### Étape A : L'Expansion (Upsampling $\uparrow L$)
+On insère $L-1$ zéros entre chaque échantillon d'origine.
+*   **Temporel :** Si j'ai la séquence `[1, 2] ` et $L=3$, j'obtiens `[1, 0, 0, 2, 0, 0]`.
+*   **Fréquentiel (Le danger) :** En insérant des zéros, on comprime l'axe temporel sans changer l'information. **Conséquence spectrale :** Le spectre original du signal (bande de base) est dupliqué $L$ fois sur toute la nouvelle bande de fréquence. On appelle cela des **images spectrales**.
+
+#### Étape B : Le Filtrage d'Interpolation
+Ces "images" sont artificielles. On doit les supprimer pour ne garder que le signal original (la bande de base).
+*   On applique un **Filtre Passe-Bas** strict.
+*   **Fréquence de coupure :** $\frac{\pi}{L}$ (ou $\frac{F_{in}}{2}$ par rapport à la nouvelle fréquence).
+*   **Effet Temporel :** Le filtre va "remplacer" les zéros par les valeurs interpolées correctes (moyenne pondérée des voisins).
+
+---
+
+### 2. La Décimation (Diminuer la cadence)
+On veut diviser la fréquence d'échantillonnage par un facteur entier $M$.
+
+C'est l'opération la plus dangereuse en traitement du signal à cause du **Théorème de Shannon-Nyquist**.
+
+#### Étape A : Le Filtrage Anti-Repliement (Anti-Aliasing)
+Si on garde seulement 1 point sur $M$, la nouvelle fréquence d'échantillonnage sera $F_{new} = F_{old} / M$.
+D'après Shannon, on ne peut représenter *aucune* fréquence au-dessus de $F_{new} / 2$.
+*   **Problème :** Si le signal original contient du bruit ou des aigus au-delà de cette limite, ils ne vont pas disparaître. Ils vont se "replier" (aliasing) dans les basses fréquences et devenir un bruit inaudible ou strident.
+*   **Solution :** Avant toute suppression de points, on doit **IMPÉRATIVEMENT** filtrer le signal avec un Passe-Bas coupant à $\frac{\pi}{M}$.
+
+#### Étape B : Le Sous-échantillonnage (Downsampling $\downarrow M$)
+Une fois le signal nettoyé, on peut conserver 1 échantillon tous les $M$ et jeter les autres sans perte d'information utile.
+
+---
+
+### 3. La Conversion Rationnelle (44.1 $\to$ 48 kHz)
+C'est la combinaison des deux.
+On ne peut pas convertir directement par un facteur 1.088. On utilise une fraction rationnelle d'entiers $\frac{L}{M}$.
+
+Pour $44.1 \to 48$ kHz, le ratio est $\frac{160}{147}$.
+
+**Le processus complet (Théorique) :**
+1.  **Expansion $\uparrow 160$ :** On monte à $44100 \times 160 = 7.056 \text{ MHz}$. Le spectre est plein de 159 images parasites.
+2.  **Filtre Unique :** On doit filtrer. Mais quelle fréquence de coupure ?
+    *   Pour interpoler, il faut couper à $\frac{\pi}{160}$.
+    *   Pour décimer ensuite, il faut couper à $\frac{\pi}{147}$.
+    *   **Règle d'Or :** Le filtre doit être le "plus restrictif" des deux. Donc on coupe à $\min(\frac{\pi}{160}, \frac{\pi}{147}) = \frac{\pi}{160}$.
+3.  **Décimation $\downarrow 147$ :** On redescend à $48 \text{ kHz}$.
+
+### Pourquoi est-ce "Avancé" (et difficile) ?
+Dans l'approche naïve (celle du code Jalon 1) :
+1.  Le filtre doit être ultra-performant (couper raide pour éliminer les images très proches). Cela demande beaucoup de coefficients (ex: 2000 taps).
+2.  Le processeur doit calculer $2000 \times 7\,056\,000$ opérations par seconde. C'est énorme.
+
+**L'astuce "Polyphase" (Jalon 2/3) :**
+Les mathématiciens ont remarqué que dans l'étape 2 (filtrage), on fait des multiplications sur les zéros ajoutés à l'étape 1.
+L'implémentation polyphasée consiste à dire : "Ne calculons pas les multiplications par zéro, et ne calculons pas les points qu'on va jeter à l'étape 3".
+Cela permet de faire le même traitement mathématique, mais à une vitesse raisonnable.
+
+Est-ce que cette explication clarifie le "Pourquoi" des zéros et du filtrage ?
